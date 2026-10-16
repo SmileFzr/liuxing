@@ -15,9 +15,36 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0a0a12;
 .btn:disabled{opacity:.35;cursor:not-allowed}
 
 /* ============ 探索 ============ */
-#explore{background:#1a1208}
-#mapBg{position:absolute;inset:0;pointer-events:none}
-#mapDecor{position:absolute;inset:0;pointer-events:none}
+#explore{background:#1a1208;overflow:hidden}
+
+/* 世界层：整体被相机平移；里面的元素全部用世界坐标 */
+#mapWorld{position:absolute;left:0;top:0;width:0;height:0;
+  will-change:transform;pointer-events:none;z-index:0}
+#mapBg{position:absolute;left:-3000px;top:-3000px;width:6000px;height:6000px;
+  pointer-events:none;z-index:0}
+#mapGround{position:absolute;pointer-events:none;z-index:1;border-radius:6px;
+  box-shadow:inset 0 0 140px rgba(0,0,0,.35)}
+#mapTexture{position:absolute;left:0;top:0;pointer-events:none;z-index:2}
+#mapDecor{position:absolute;left:0;top:0;pointer-events:none;z-index:3}
+
+/* 城门：围墙上的缺口 */
+.gate{position:absolute;transform:translate(-50%,-50%);pointer-events:none;
+  background:linear-gradient(180deg,#c9a25c,#8a6a34);
+  border:2px dashed rgba(70,40,10,.7);border-radius:4px;
+  box-shadow:inset 0 0 12px rgba(0,0,0,.5)}
+
+/* 野外无限平面的一页：内容按页内坐标摆放，整页绝对定位 */
+.page{position:absolute;pointer-events:none}
+
+/* 小地图：野外回城 / 通往下一区域的方向指引 */
+#minimap{position:absolute;top:64px;right:10px;z-index:12;
+  background:rgba(10,10,22,.72);border:1px solid rgba(255,255,255,.16);
+  border-radius:10px;padding:6px 9px;font-size:11px;line-height:1.7;
+  color:#e8e8f0;pointer-events:none;text-align:right;
+  text-shadow:0 1px 4px #000;backdrop-filter:blur(3px)}
+#minimap .mmRow{white-space:nowrap;opacity:.92}
+#minimap .mmRow.near{color:#6ee7a0;font-weight:700}
+
 .decor{position:absolute;filter:drop-shadow(0 2px 4px rgba(0,0,0,.55));
   transform:translate(-50%,-50%);will-change:left,top;line-height:1}
 
@@ -36,7 +63,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0a0a12;
     linear-gradient(180deg,#7A5A38,#5A4023);
   border-radius:5px;box-shadow:inset 0 0 25px rgba(0,0,0,.4)}
 
-.npcMark{position:absolute;font-size:22px;transform:translate(-50%,-50%);
+.npcMark{position:absolute;font-size:30px;transform:translate(-50%,-50%);
   pointer-events:none;filter:drop-shadow(0 2px 6px rgba(0,0,0,.9));
   animation:floatY 1.6s ease-in-out infinite;z-index:6;line-height:1}
 @keyframes floatY{0%,100%{transform:translate(-50%,-50%)}50%{transform:translate(-50%,calc(-50% - 6px))}}
@@ -66,10 +93,11 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0a0a12;
 }
 
 #party{position:absolute;inset:0;z-index:5;pointer-events:none}
+/* 人物按真实比例：比树/房子小 */
 .char{position:absolute;filter:drop-shadow(0 3px 6px rgba(0,0,0,.75));
   transform:translate(-50%,-50%);will-change:left,top;z-index:2;line-height:1}
-.char.leader{font-size:32px;z-index:3}
-.char.follower{font-size:26px;opacity:.92}
+.char.leader{font-size:30px;z-index:3}
+.char.follower{font-size:24px;opacity:.92}
 
 #exploreUI{position:absolute;inset:0;pointer-events:none}
 #topBar{position:absolute;top:0;left:0;right:0;padding:12px;

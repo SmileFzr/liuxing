@@ -16,15 +16,20 @@
   <button class="btn" id="btnContinue">📖 继 续 游 戏</button>
   <button class="btn" id="btnCodexMonster">📚 怪 物 图 鉴</button>
   <button class="btn" id="btnCodexPet">🐾 宠 物 图 鉴</button>
-  <button class="btn warn" id="btnReincarnate" style="margin-top:20px">🔄 轮 回（击杀最终BOSS）</button>
+  <button class="btn warn" id="btnReincarnate" style="margin-top:20px">🔄 轮 回（需先击杀最终 BOSS）</button>
   <div class="versionTag">v0.3.0 · 轮回<br><span style="opacity:.55;font-size:10px">12生肖 · 悬赏 · 图鉴 · 轮回</span></div>
 </div>
 
 <!-- ============ 探索 ============ -->
 <div class="screen hidden" id="explore">
-  <div id="mapBg"></div>
-  <div id="mapDecor"></div>
+  <div id="mapWorld">
+    <div id="mapBg"></div>
+    <div id="mapGround"></div>
+    <div id="mapTexture"></div>
+    <div id="mapDecor"></div>
+  </div>
   <div id="party"></div>
+  <div id="minimap" class="hidden"></div>
   <div id="interactBtn" class="hidden"></div>
   <div id="exploreUI">
     <div id="topBar">
@@ -108,7 +113,6 @@
     <div class="panelTitle">👥 队伍</div>
     <div class="panelSub">3 角色 + 最多 3 宠物出战</div>
     <div id="teamList"></div>
-    <div class="sectionTitle">宠物仓库（最多 12 只）</div>
     <div id="petList"></div>
     <button class="btn primary" id="teamClose" style="width:100%;margin-top:14px">关 闭</button>
   </div>
@@ -124,6 +128,26 @@
   </div>
 </div>
 
+<!-- ============ 通用面板（商店 / 药师 / 神秘人） ============ -->
+<div class="overlay hidden" id="dynPanel">
+  <div class="panel">
+    <div class="panelTitle" id="dynTitle">面 板</div>
+    <div class="panelSub" id="dynSub"></div>
+    <div id="dynBody"></div>
+    <button class="btn primary" id="dynClose" style="width:100%;margin-top:14px">关 闭</button>
+  </div>
+</div>
+
+<!-- ============ 战斗结算 ============ -->
+<div class="overlay hidden" id="resultPanel">
+  <div class="panel">
+    <div class="panelTitle" id="resultTitle">战斗结算</div>
+    <div class="panelSub">战 报</div>
+    <div id="resultBody"></div>
+    <button class="btn primary" id="resultClose" style="width:100%;margin-top:14px">继 续</button>
+  </div>
+</div>
+
 <!-- ============ 对话框 ============ -->
 <div class="hidden" id="dialog">
   <div id="dlgHeader">
@@ -136,6 +160,12 @@
 
 <div id="toast"></div>
 
-<script src="game.js"></script>
+<script src="js/data.js"></script>
+<script src="js/core.js"></script>
+<script src="js/battle.js"></script>
+<script src="js/explore.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/ui-panels.js"></script>
+<script src="js/main.js"></script>
 </body>
 </html>
