@@ -510,7 +510,8 @@ try {
   ok('世界层应用了相机位移', !!worldEl && /translate\(/.test(worldEl.style.transform || ''),
      worldEl && worldEl.style.transform);
 
-  /* ---- 出口与方向指引 ---- */
+  /* ---- 出口与方向指引（必须在切回城镇之前测） ---- */
+  G().zone = 'dune';
   const backExit = S.WILD_EXITS.dune;
   ok('荒野配置了回城出口', !!backExit, backExit ? backExit.name : '无');
   if (backExit) {
@@ -519,11 +520,57 @@ try {
     ok('走近回城出口出现互动按钮', !!S.Explore.near && S.Explore.near.type === 'exit',
        JSON.stringify(S.Explore.near && S.Explore.near.label));
     G().pos = { x:backExit.x - 10, y:backExit.y };
-    S.updateMinimap();
+    S.ui.updateMinimap();
     const mm = S.document.getElementById('minimap');
-    ok('小地图给出回城方向指引', !mm.classList.contains('hidden') && /格/.test(mm.innerHTML || ''),
+    ok('小地图给出回城方向指引', mm.style.display !== 'none' && /格/.test(mm.innerHTML || ''),
        (mm.innerHTML || '').slice(0, 60));
   }
+
+  /* ---- 相机两种模式 ---- */
+  S.ui.showScreen('explore');
+  G().zone = 'town';
+  G().pos = { x:14, y:10 };
+  S.enterExplore('here');
+  S.ui.setFollow(true);
+  S.ui.renderPartyChars();
+  const vpF = S.ui.viewport();
+  const camF1 = S.ui.cameraAt();
+  const charF = S.document.getElementById('char_' + G().party[0].uid);
+  ok('跟随模式：人物固定在屏幕中心',
+     Math.abs(parseFloat(charF.style.left) - vpF.w / 2) < 1,
+     `left=${charF.style.left}，屏幕宽 ${vpF.w}`);
+  /* 走一段后，人物仍在中心，但相机移动了 */
+  S.Explore.dir = { x:1, y:0 };
+  for (let i = 0; i < 20; i++) S.updateExplore(0.05);
+  S.ui.renderPartyChars();
+  const camF2 = S.ui.cameraAt();
+  const charF2 = S.document.getElementById('char_' + G().party[0].uid);
+  ok('跟随模式：走动后相机跟着移动',
+     Math.abs(camF2.x - camF1.x) > 5,
+     `相机 ${camF1.x.toFixed(0)} -> ${camF2.x.toFixed(0)}`);
+  ok('跟随模式：走动后人物仍在屏幕中心',
+     Math.abs(parseFloat(charF2.style.left) - vpF.w / 2) < 1, `left=${charF2.style.left}`);
+
+  /* 固定相机模式：相机不动，人物在屏幕上真实移动 */
+  S.ui.setFollow(false);
+  G().pos = { x:14, y:10 };
+  S.ui.renderPartyChars();
+  const camX1 = S.ui.cameraAt();
+  const charX1 = parseFloat(S.document.getElementById('char_' + G().party[0].uid).style.left);
+  S.Explore.dir = { x:1, y:0 };
+  for (let i = 0; i < 20; i++) S.updateExplore(0.05);
+  S.ui.renderPartyChars();
+  const camX2 = S.ui.cameraAt();
+  const charX2 = parseFloat(S.document.getElementById('char_' + G().party[0].uid).style.left);
+  ok('固定模式：相机完全不动', Math.abs(camX2.x - camX1.x) < 0.01,
+     `${camX1.x.toFixed(1)} -> ${camX2.x.toFixed(1)}`);
+  ok(`固定模式：人物在屏幕上真实移动（移动了 ${(charX2 - charX1).toFixed(0)}px）`,
+     charX2 - charX1 > 20, `${charX1.toFixed(0)} -> ${charX2.toFixed(0)}`);
+  ok('相机模式可来回切换', S.ui.setFollow(true) === true && S.ui.setFollow(false) === false);
+  S.ui.setFollow(true);            // 恢复默认
+  S.Explore.dir = { x:0, y:0 };
+
+  /* ---- 出城门 ---- */
   /* 出城门应该落到野外出生点，而不是墙里 */
   G().zone = 'town';
   S.enterExplore('west');
@@ -629,6 +676,38 @@ try {
   for (let i = 0; i < 20; i++) S.updateExplore(0.05);
   ok('野外也能正常移动', Math.hypot(G().pos.x - far.x, G().pos.y - far.y) > 1,
      JSON.stringify(G().pos));
+  S.Explore.dir = { x:0, y:0 };
+
+  /* ---- 端到端：点"开始游戏"按钮 → 拖摇杆走路 ---- */
+  S.resetSave();
+  G().zone = 'town';
+  const btn = S.document.getElementById('btnNewGame');
+  btn.click();                                   // 走真实的新游戏流程
+  log(`  （点击开始游戏后 zone=${G().zone}, pos=${JSON.stringify(G().pos)}）`);
+  ok('点击【开始游戏】进入沙丘镇', G().zone === 'town', G().zone);
+  const posAtStart = { x:G().pos.x, y:G().pos.y };
+  ok('开局角色站在可通行的空地上', S.isWalkable(posAtStart.x, posAtStart.y) === true,
+     JSON.stringify(posAtStart));
+
+  /* 连拖 200 帧（约 10 秒），检查不会卡住也不会崩 */
+  fire('touchstart', 100, 300);
+  fire('touchmove', 160, 340);                   // 右下方向
+  let e2 = null, stuckAt = null;
+  for (let i = 0; i < 200; i++) {
+    try {
+      S.updateExplore(1 / 60);
+      if (i === 60 && Math.hypot(G().pos.x - posAtStart.x, G().pos.y - posAtStart.y) < 0.5) {
+        stuckAt = { x:G().pos.x, y:G().pos.y };
+      }
+    } catch (e) { e2 = e.message; break; }
+  }
+  const walked = Math.hypot(G().pos.x - posAtStart.x, G().pos.y - posAtStart.y);
+  ok('连拖 200 帧不崩溃', e2 === null, e2 || '');
+  ok(`拖住摇杆 10 秒能走出一段距离（${walked.toFixed(1)} 格）`, walked > 5,
+     `从 ${JSON.stringify(posAtStart)} 到 ${JSON.stringify(G().pos)}`);
+  ok('走动过程中不会卡住不动', stuckAt === null, stuckAt ? JSON.stringify(stuckAt) : '');
+  ok('走动后仍在可通行位置', S.isWalkable(G().pos.x, G().pos.y) === true, JSON.stringify(G().pos));
+  fire('touchend', 160, 340);
   S.Explore.dir = { x:0, y:0 };
 } catch (e) { failures++; ok('走动回归', false, e.message); }
 

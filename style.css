@@ -35,6 +35,9 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0a0a12;
 
 /* 野外无限平面的一页：内容按页内坐标摆放，整页绝对定位 */
 .page{position:absolute;pointer-events:none}
+/* 地面斑块：给野外一点纹理，走动时有参照物 */
+.patch{position:absolute;transform:translate(-50%,-50%);pointer-events:none;
+  border-radius:50%;filter:blur(1px);z-index:0}
 
 /* 小地图：野外回城 / 通往下一区域的方向指引 */
 #minimap{position:absolute;top:64px;right:10px;z-index:12;
@@ -44,6 +47,18 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0a0a12;
   text-shadow:0 1px 4px #000;backdrop-filter:blur(3px)}
 #minimap .mmRow{white-space:nowrap;opacity:.92}
 #minimap .mmRow.near{color:#6ee7a0;font-weight:700}
+
+/* 调试数值面板（排查走不动）：连点地名 5 次或 LL.debug() 开关 */
+#debugPanel{position:absolute;left:6px;bottom:6px;z-index:200;display:none;
+  background:rgba(0,0,0,.82);border:1px solid #ffd76a;border-radius:8px;
+  padding:6px 8px;font:11px/1.5 ui-monospace,"SF Mono",Consolas,monospace;
+  color:#ffd76a;white-space:pre;pointer-events:none;text-shadow:0 1px 3px #000}
+
+/* 运行时报错：直接贴在屏幕上，不用开控制台 */
+#errPanel{position:absolute;left:6px;right:6px;top:6px;z-index:300;display:none;
+  background:rgba(120,0,0,.92);border:1px solid #ff6b6b;border-radius:8px;
+  padding:8px 10px;font:11px/1.5 ui-monospace,Consolas,monospace;
+  color:#ffe0e0;white-space:pre-wrap;word-break:break-all}
 
 .decor{position:absolute;filter:drop-shadow(0 2px 4px rgba(0,0,0,.55));
   transform:translate(-50%,-50%);will-change:left,top;line-height:1}

@@ -11,6 +11,22 @@
 function initGame() {
   ui.showScreen('menu');
 
+  /* 先把运行时报错抓出来显示（免得又是"点了没反应"却看不到原因） */
+  installErrorTrap();
+  ui._debugOn = true;              // 调试面板默认打开，排查完再关
+  toggleDebug();
+
+  /* 连点左上角地名 5 次 → 开关调试面板 */
+  let tapCount = 0, tapTimer = 0;
+  $('locName').addEventListener('click', () => {
+    clearTimeout(tapTimer);
+    if (++tapCount >= 5) { tapCount = 0; toggleDebug(); return; }
+    tapTimer = setTimeout(() => { tapCount = 0; }, 1200);
+  });
+
+  /* 连点右上角血条 3 次 → 切换相机模式（跟随 / 固定） */
+  ui.bindCameraToggle();
+
   /* ---------- 主菜单 ---------- */
   $('btnNewGame').onclick = () => {
     if (hasSave() && !confirm('已有存档，重新开始会覆盖它。确定吗？')) return;
@@ -147,7 +163,11 @@ function mainLoop(now) {
 }
 
 /* 暴露给控制台调试 */
-window.LL = { get G(){ return G; }, Battle, Explore, ui, newGame, saveGame, loadGame };
+window.LL = {
+  get G(){ return G; }, Battle, Explore, ui, newGame, saveGame, loadGame,
+  debug: () => toggleDebug(),
+  where: () => ({ zone:G && G.zone, pos:G && G.pos, dir:Explore.dir, walkable:G && isWalkable(G.pos.x, G.pos.y) }),
+};
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initGame);
 else initGame();

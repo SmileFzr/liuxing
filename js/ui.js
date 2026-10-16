@@ -89,9 +89,15 @@ ui.updateHint = function () {
 /* ============================================================
    相机跟随
    ------------------------------------------------------------
-   世界层整体平移，玩家固定在屏幕中心；靠近城镇边界时夹住，
-   避免把地图外的空白拉进视野。野外是无限的，不夹。
+   两种模式（ui.follow）：
+     true （默认）相机跟随：人物固定在屏幕中心，地图从脚下滑过
+     false        固定相机：地图整张不动，人物在屏幕上真实移动
+   在城镇里相机还会被地图边界夹住，不会露出地图外的空白。
    ============================================================ */
+ui.follow = true;
+/* 固定相机模式下，地图在屏幕上的左上角偏移 */
+ui.originOffset = { x:0, y:0 };
+
 ui.viewport = function () {
   const el = $('explore');
   const inner = $('exploreUI');
@@ -103,12 +109,20 @@ ui.viewport = function () {
 ui.cameraAt = function () {
   const vp = ui.viewport();
   const pw = playerWorld();
+
+  if (!ui.follow) {
+    /* 固定相机：按地图尺寸居中（比屏幕小就居中，大就从左上角开始） */
+    const wW = zoneW() * TILE, wH = zoneH() * TILE;
+    const cam = { x:wW <= vp.w ? -(vp.w - wW) / 2 : 0,
+                  y:wH <= vp.h ? -(vp.h - wH) / 2 : 0 };
+    return cam;
+  }
+
   let camX = pw.x - vp.w / 2, camY = pw.y - vp.h / 2;
   if (isTown()) {
-    /* 夹住相机，让城镇边缘贴住屏幕边 */
     const wW = zoneW() * TILE, wH = zoneH() * TILE;
-    camX = wW <= vp.w ? (wW - vp.w) / 2 : clamp(camX, 0, wW - vp.w);
-    camY = wH <= vp.h ? (wH - vp.h) / 2 : clamp(camY, 0, wH - vp.h);
+    camX = wW <= vp.w ? -(vp.w - wW) / 2 : clamp(camX, 0, wW - vp.w);
+    camY = wH <= vp.h ? -(vp.h - wH) / 2 : clamp(camY, 0, wH - vp.h);
   }
   return { x:camX, y:camY };
 };
@@ -217,13 +231,28 @@ function buildTownDecor() {
       frag.appendChild(el);
     }
   }
-  /* 房屋以外再撒一些草木石头，让场景更丰富（稳定随机，不会闪） */
+  /* 房屋以外再撒一些草木石头，让场景更丰富（稳定随机，不会闪）
+     注意：不能在墙/房屋内或紧贴它们生成，否则会盖住房子，看起来一团糟 */
   const scatter = [WILD_ICONS[0], WILD_ICONS[1], WILD_ICONS[4], WILD_ICONS[3], WILD_ICONS[5], WILD_ICONS[9]];
+  const isBlockedNear = (x, y) => {
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const row = TOWN_MAP[y + dy];
+        const t = row ? row[x + dx] : '1';
+        if (t !== '0') return true;          // 自身或周围有墙/房屋/城门
+      }
+    }
+    /* NPC 站位与出生点也要留空，别挡住交互 */
+    if (NPCS.some(n => Math.abs(n.x - x) <= 1 && Math.abs(n.y - y) <= 1)) return true;
+    if (Math.abs(TOWN_SPAWN.x - x) <= 1 && Math.abs(TOWN_SPAWN.y - y) <= 1) return true;
+    return false;
+  };
   for (let y = 1; y < TOWN_H - 1; y++) {
     for (let x = 1; x < TOWN_W - 1; x++) {
       if (TOWN_MAP[y][x] !== '0') continue;
       const r = hashAt(x, y, 11);
       if (r > 0.18) continue;
+      if (isBlockedNear(x, y)) continue;
       const kind = hashAt(x, y, 12);
       const item = scatter[Math.floor(kind * scatter.length)] || WILD_ICONS[4];
       const el = document.createElement('div');
@@ -291,12 +320,56 @@ function fillDecoPage(page, px, py) {
   page.appendChild(frag);
 }
 
+/* 地面细节：稳定随机的小色斑，让野外有参照物、走动时能看出在移动 */
+function buildWildPatches(cx, cy) {
+  const decor = $('mapDecor');
+  if (!decor) return;
+  const R = 3;
+  const tones = {
+    dune:  ['rgba(160,120,60,.30)', 'rgba(240,215,150,.28)', 'rgba(120,90,45,.22)'],
+    ruins: ['rgba(40,34,48,.35)',   'rgba(150,140,160,.22)', 'rgba(90,80,100,.28)'],
+    tomb:  ['rgba(20,14,28,.40)',   'rgba(110,90,140,.22)',  'rgba(70,50,90,.30)'],
+  };
+  const pal = tones[G.zone] || tones.dune;
+  const frag = document.createDocumentFragment();
+  for (let px = cx - R; px <= cx + R; px++) {
+    for (let py = cy - R; py <= cy + R; py++) {
+      for (let i = 0; i < 5; i++) {
+        for (let j = 0; j < 6; j++) {
+          const gx = px * 5 + i, gy = py * 6 + j;
+          const r1 = hashAt(gx, gy, 21);
+          if (r1 > 0.55) continue;
+          const r2 = hashAt(gx, gy, 22);
+          const r3 = hashAt(gx, gy, 23);
+          const el = document.createElement('div');
+          el.className = 'patch';
+          const w = Math.round(30 + r2 * 110);
+          el.style.width = w + 'px';
+          el.style.height = Math.round(w * (0.5 + r3 * 0.6)) + 'px';
+          el.style.background = pal[Math.floor(r3 * pal.length)];
+          el.style.left = Math.round(px * PAGE_W + i * (PAGE_W / 5) + r2 * 60) + 'px';
+          el.style.top  = Math.round(py * PAGE_H + j * (PAGE_H / 6) + r3 * 60) + 'px';
+          frag.appendChild(el);
+        }
+      }
+    }
+  }
+  decor.appendChild(frag);
+}
+
+/* 野外：无限平面用「分页」实现 —— 每页固定 420×560 像素，
+   相机每帧按需补页，内容用稳定随机生成（走远再回来不会变） */
 function renderWildPages() {
   const decor = $('mapDecor');
+  decor.innerHTML = '';
   decor.style.display = 'block';
   const pw = playerWorld();
   const cx = Math.floor(pw.x / PAGE_W), cy = Math.floor(pw.y / PAGE_H);
   const R = 3;   // 3×3 = 9 页，足够铺满任何手机视口
+
+  /* 先铺地面斑块，再放草木，最后放出口标记 */
+  buildWildPatches(cx, cy);
+
   for (let px = cx - R; px <= cx + R; px++) {
     for (let py = cy - R; py <= cy + R; py++) {
       const page = document.createElement('div');
@@ -309,6 +382,7 @@ function renderWildPages() {
       decor.appendChild(page);
     }
   }
+
   /* 出口与区域通道：世界坐标固定 */
   const back = WILD_EXITS[G.zone];
   if (back) decor.appendChild(worldMark(back.emoji, back.x, back.y));
@@ -335,20 +409,47 @@ ui.renderPartyChars = function () {
 ui.updatePlayer = function () {
   const units = G.party.concat(activePets());
   const vp = ui.viewport();
-  const cam = ui.applyCamera();          // 相机跟随（每帧一次）
-  const target = { x:vp.w / 2, y:vp.h / 2 };
+  const cam = ui.applyCamera();          // 相机（每帧一次）
+  const pw = playerWorld();
   units.forEach((u, i) => {
     const el = $('char_' + u.uid);
     if (!el) return;
     const trail = i * 0.5;
-    const px = target.x - Explore.dir.x * trail * TILE;
-    const py = target.y - Explore.dir.y * trail * TILE;
-    el.style.left = px + 'px';
-    el.style.top  = py + 'px';
+    const wx = pw.x - Explore.dir.x * trail * TILE;
+    const wy = pw.y - Explore.dir.y * trail * TILE;
+    const sx = ui.follow ? (vp.w / 2 - Explore.dir.x * trail * TILE) : (wx - cam.x);
+    const sy = ui.follow ? (vp.h / 2 - Explore.dir.y * trail * TILE) : (wy - cam.y);
+    el.style.left = sx + 'px';
+    el.style.top  = sy + 'px';
     el.style.transform = 'translate(-50%,-50%) scaleX(' + ui.facing + ')';
     el.style.zIndex = 10 - i;
   });
 };
+
+/* 相机模式：true 跟随（人物在屏幕中心），false 固定（地图不动、人物真实移动） */
+ui.setFollow = function (on) {
+  ui.follow = !!on;
+  if (typeof toast === 'function') {
+    toast(ui.follow ? '相机：跟随人物（地图滚动）' : '相机：固定（地图不动，人物移动）');
+  }
+  return ui.follow;
+};
+
+/* 连点右上角血条 3 次 → 切换相机模式 */
+ui.bindCameraToggle = function () {
+  let taps = 0, timer = 0;
+  const el = $('partyStats');
+  if (!el || el._cameraBound) return;
+  el._cameraBound = true;
+  el.style.pointerEvents = 'auto';
+  el.addEventListener('click', () => {
+    clearTimeout(timer);
+    if (++taps >= 3) { taps = 0; toggleFollow(); return; }
+    timer = setTimeout(() => { taps = 0; }, 900);
+  });
+};
+
+function toggleFollow() { return ui.setFollow(!ui.follow); }
 
 ui.setFacing = function (f) { ui.facing = f; };
 

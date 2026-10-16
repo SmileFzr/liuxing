@@ -181,6 +181,82 @@ function updateWorldHint() {
 }
 
 /* ============================================================
+   调试数值面板（排查"走不动"用）
+   ------------------------------------------------------------
+   打开方式：连点左上角地名 5 次，或控制台执行 LL.debug()
+   ============================================================ */
+function debugPanelEl() {
+  let el = document.getElementById('debugPanel');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'debugPanel';
+    document.body.appendChild(el);
+  }
+  return el;
+}
+
+function toggleDebug() {
+  const el = debugPanelEl();
+  const on = el.style.display !== 'block';
+  el.style.display = on ? 'block' : 'none';
+  ui._debugOn = on;
+  if (on) updateDebugPanel();
+  return on;
+}
+function updateDebugPanel() {
+  if (!ui._debugOn) return;
+  const el = debugPanelEl();
+  const w = document.createElement('div');
+  if (!G) {
+    w.textContent = '尚未开始游戏\n（点【开始游戏】后这里显示实时数值）';
+    el.innerHTML = '';
+    el.appendChild(w);
+    return;
+  }
+  const dir = Explore.dir;
+  const tile = Math.floor(G.pos.x) + ',' + Math.floor(G.pos.y);
+  const walk = isWalkable(G.pos.x, G.pos.y);
+  const nextX = G.pos.x + dir.x * TILE_SPEED * 0.05;
+  const nextY = G.pos.y + dir.y * TILE_SPEED * 0.05;
+  const cam = ui.cameraAt();
+  const lines = [
+    'pos  ' + G.pos.x.toFixed(2) + ', ' + G.pos.y.toFixed(2),
+    'dir  ' + dir.x.toFixed(2) + ', ' + dir.y.toFixed(2),
+    'tile ' + tile + '  walk=' + (walk ? 'Y' : 'N'),
+    'next walk=' + (isWalkable(nextX, nextY) ? 'Y' : 'N'),
+    '走了 ' + (Explore.odometer || 0).toFixed(1) + ' 格',
+    'zone ' + G.zone + '  相机 ' + cam.x.toFixed(0) + ',' + cam.y.toFixed(0),
+    '帧   ' + (ui._frameCount || 0) + '  区域重绘 ' + (ui._zoneSig || '-'),
+  ];
+  w.textContent = lines.join('\n');
+  el.innerHTML = '';
+  el.appendChild(w);
+}
+
+/* ============================================================
+   运行时报错直接显示在屏幕上（排查"点了没反应"用）
+   ============================================================ */
+function showRuntimeError(msg) {
+  let el = document.getElementById('errPanel');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'errPanel';
+    document.body.appendChild(el);
+  }
+  el.textContent = '⚠️ 运行时报错：\n' + msg;
+  el.style.display = 'block';
+}
+
+function installErrorTrap() {
+  window.addEventListener('error', (e) => {
+    showRuntimeError((e.message || 'unknown') + (e.filename ? '\n' + e.filename + ':' + e.lineno : ''));
+  });
+  window.addEventListener('unhandledrejection', (e) => {
+    showRuntimeError('Promise: ' + (e.reason && e.reason.message ? e.reason.message : e.reason));
+  });
+}
+
+/* ============================================================
    主循环
    ============================================================ */
 function loopExplore(now) {
@@ -194,6 +270,7 @@ function loopExplore(now) {
 function updateExplore(dt) {
   if (!Explore.active || Battle.active) return;
 
+  ui._frameCount = (ui._frameCount || 0) + 1;
   /* 自动探索：朝随机目标点走，走到就换点 */
   if (Explore.auto && !ui.hasOverlay()) {
     Explore.autoTimer -= dt;
@@ -219,22 +296,36 @@ function updateExplore(dt) {
   const speed = Explore.auto ? TILE_SPEED_AUTO : TILE_SPEED;
   const stepX = dx * speed * dt, stepY = dy * speed * dt;
 
+  /* 分轴移动：撞到墙/房子时，停在当前格中心（不会穿墙，也不会卡死） */
   let moved = 0;
   if (stepX) {
     const nx = G.pos.x + stepX;
-    if (isWalkable(nx + Math.sign(stepX) * 0.35, G.pos.y)) {
-      /* 城镇里撞墙就贴墙走，不要卡死 */
-      G.pos.x = isWalkable(nx, G.pos.y) ? nx : Math.floor(nx) + 0.5;
+    if (isWalkable(nx, G.pos.y)) {
+      G.pos.x = nx;
       moved += Math.abs(stepX);
+    } else {
+      const center = Math.floor(G.pos.x) + 0.5;
+      const d = Math.abs(center - G.pos.x);
+      if (d > 0.001) { G.pos.x = center; moved += d; }
     }
   }
   if (stepY) {
     const ny = G.pos.y + stepY;
-    if (isWalkable(G.pos.x, ny + Math.sign(stepY) * 0.35)) {
-      G.pos.y = isWalkable(G.pos.x, ny) ? ny : Math.floor(ny) + 0.5;
+    if (isWalkable(G.pos.x, ny)) {
+      G.pos.y = ny;
       moved += Math.abs(stepY);
+    } else {
+      const center = Math.floor(G.pos.y) + 0.5;
+      const d = Math.abs(center - G.pos.y);
+      if (d > 0.001) { G.pos.y = center; moved += d; }
     }
   }
+
+  /* 保险：万一卡进了不可通行的格子（存档坐标过时等），立刻脱困 */
+  if (!isWalkable(G.pos.x, G.pos.y)) ensureWalkable();
+
+  /* 累计行走距离（调试面板显示，用来确认"到底有没有在动"） */
+  Explore.odometer = (Explore.odometer || 0) + moved;
 
   if (dx) ui.setFacing(dx < 0 ? -1 : 1);
 
@@ -252,6 +343,7 @@ function updateExplore(dt) {
   updateNearby();
   ui.updatePlayer();
   ui.updateMinimap();
+  updateDebugPanel();
 }
 
 function nearPoint(a, b, r) { return Math.hypot(a.x - b.x, a.y - b.y) <= r; }
